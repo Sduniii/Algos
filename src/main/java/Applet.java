@@ -15,7 +15,7 @@ public class Applet extends PApplet {
     private float w = 70;
     private float h = 30;
     private boolean inReset = false;
-    private int totalCities = 7;
+    private int totalCities = 6;
 
     //RANDOM
     private List<Vector> randomCities = new ArrayList<>(totalCities);
@@ -32,7 +32,7 @@ public class Applet extends PApplet {
     private List<Integer> lexicalBestEver = new ArrayList<>(totalCities);
     private List<Integer> lexicalOrder = new ArrayList<>(totalCities);
     private int lexicalCount;
-    private int lexicaltime;
+    private int lexicaltime, lexicaltimeHidden;
     private boolean lexicalEnd;
 
     //GENETIC
@@ -87,6 +87,7 @@ public class Applet extends PApplet {
         lexicalRecordDistance = calcDistance(lexicalCities, lexicalOrder);
         lexicalTotalPermutations = factorial(totalCities);
         lexicaltime = millis();
+
 
         //GENETIC
 //        for (Vector v : lexicalCities) {
@@ -180,9 +181,16 @@ public class Applet extends PApplet {
             Collections.copy(randomBestEver, randomOrder);
             randomtime = millis();
         }
-        if (randomRecordDistance <= lexicalRecordDistance && !randomIsBest) {
-            randomtime = randomtime - lexicaltime;
-            randomIsBest = true;
+
+        if (lexicalEnd) {
+            System.out.println(lexicaltimeHidden);
+            lexicaltime = 0;
+            if(randomRecordDistance <= lexicalRecordDistance && !randomIsBest) {
+                randomIsBest = true;
+                randomtime = randomtime - lexicaltimeHidden;
+            }else if(randomRecordDistance > lexicalRecordDistance && !randomIsBest){
+                randomtime = millis() - lexicaltimeHidden;
+            }
         }
     }
 
@@ -222,7 +230,7 @@ public class Applet extends PApplet {
         //System.out.println(lexicalCount);
         text(String.valueOf(round(percent, 2)) + "% completed\n" + s + "\n" + lexicaltime + "ms", width / 3, (height / 2) - 44);
 
-        if (percent != 100) {
+        if (percent < 100) {
             lexicalCount = lexicalOrderSwap(lexicalOrder, lexicalCount);
             float d = calcDistance(lexicalCities, lexicalOrder);
             if (d < lexicalRecordDistance) {
@@ -230,11 +238,9 @@ public class Applet extends PApplet {
                 Collections.copy(lexicalBestEver, lexicalOrder);
                 lexicaltime = millis();
             }
-        } else {
-            if (randomRecordDistance <= lexicalRecordDistance && !lexicalEnd) {
-                lexicaltime = lexicaltime - randomtime;
-            }
+        } else if(!lexicalEnd) {
             lexicalEnd = true;
+            lexicaltimeHidden = lexicaltime;
         }
     }
 
