@@ -2,7 +2,9 @@ import processing.core.PApplet;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class Applet extends PApplet {
 
@@ -15,31 +17,40 @@ public class Applet extends PApplet {
     private float w = 70;
     private float h = 30;
     private boolean inReset = false;
-    private int totalCities = 6;
+    private int totalCities = 12;
+    private long starttime;
+    private List<Vector> cities = new ArrayList<>(totalCities);
+    private Estimate estimate;
+    private long runtime;
+    private float fps = 200;
 
     //RANDOM
-    private List<Vector> randomCities = new ArrayList<>(totalCities);
     private float randomRecordDistance;
     private List<Integer> randomBestEver = new ArrayList<>(totalCities);
     private List<Integer> randomOrder = new ArrayList<>(totalCities);
-    private int randomtime;
+    private long randomtime;
     private boolean randomIsBest;
 
     //LEXICALORDER
-    private List<Vector> lexicalCities = new ArrayList<>(totalCities);
     private float lexicalRecordDistance;
     private double lexicalTotalPermutations;
     private List<Integer> lexicalBestEver = new ArrayList<>(totalCities);
     private List<Integer> lexicalOrder = new ArrayList<>(totalCities);
     private int lexicalCount;
-    private int lexicaltime, lexicaltimeHidden;
+    private long lexicaltime;
     private boolean lexicalEnd;
 
     //GENETIC
-    private List<Vector> genericCities = new ArrayList<>(totalCities);
-    private int geneticPopulationCount = 10;
+    private int geneticPopulationCount = 500;
     private List<List<Integer>> geneticPopulation = new ArrayList<>(geneticPopulationCount);
-    private List<Double> geneticFitness = new ArrayList<>();
+    private List<Float> geneticFitness = new ArrayList<>();
+    private List<Integer> geneticStandartOrder = new ArrayList<>(totalCities);
+    private List<Integer> geneticBestEver = new ArrayList<>();
+    private List<Integer> geneticCurrentBest = new ArrayList<>();
+    private float geneticRecordDistance;
+    private long genetictime;
+    private boolean geneticIsBest;
+    private float mutationRate = 0.2f;
 
 
     public static void main(String args[]) {
@@ -54,60 +65,65 @@ public class Applet extends PApplet {
     @Override
     public void setup() {
         clear();
-        frameRate(100);
+        frameRate(fps);
         reset();
     }
 
     private void reset() {
+        starttime = System.currentTimeMillis();
+        estimate = new Estimate();
+        estimate.setTimeStart(starttime);
+        runtime = starttime;
+        cities.clear();
+        for (int i = 0; i < totalCities; i++) {
+            cities.add(new Vector(random(width / 3), random(50, (height / 2) - 70)));
+        }
+
         //RANDOM
-        randomCities.clear();
         randomBestEver.clear();
         randomOrder.clear();
         for (int i = 0; i < totalCities; i++) {
-            randomCities.add(new Vector(random(width / 3), random(height / 2)));
             randomOrder.add(i);
             randomBestEver.add(i);
         }
-        randomRecordDistance = calcDistance(randomCities, randomOrder);
-        randomtime = millis();
+        randomRecordDistance = calcDistance(cities, randomOrder);
+        randomtime = 0;
         randomIsBest = false;
 
         //LEXICALORDER
-        lexicalCities.clear();
         lexicalOrder.clear();
         lexicalBestEver.clear();
         lexicalCount = 1;
         lexicalEnd = false;
         for (int i = 0; i < totalCities; i++) {
-
-            lexicalCities.add(new Vector(randomCities.get(i).getX() + (width / 3), randomCities.get(i).getY()));
             lexicalOrder.add(i);
             lexicalBestEver.add(i);
         }
-        lexicalRecordDistance = calcDistance(lexicalCities, lexicalOrder);
+        lexicalRecordDistance = calcDistance(cities, lexicalOrder);
         lexicalTotalPermutations = factorial(totalCities);
-        lexicaltime = millis();
+        lexicaltime = 0;
 
 
         //GENETIC
-//        for (Vector v : lexicalCities) {
-//            v.setX(random(width / 3, 2 * width / 3));
-//            v.setY(random(height / 2));
-//        }
-//        for (int i = 0; i < lexicalOrder.size(); i++) {
-//            lexicalOrder.set(i, i);
-//            lexicalbestEver.set(i, i);
-//        }
-//        lexicalRecordDistance = calcDistance(lexicalCities, lexicalOrder);
-//        lexicalCount = 0;
-//        for (int i = 0; i < populationCount; i++) {
-//            population.add(new ArrayList<>(order));
-//            Collections.shuffle(population.get(i));
-//        }
-//            System.out.println(population);
-//
-//
-//        totalPermutations = factorial(totalCities);
+        genetictime = 0;
+        geneticIsBest = false;
+        geneticFitness.clear();
+        geneticPopulation.clear();
+        geneticBestEver.clear();
+        geneticCurrentBest.clear();
+        geneticStandartOrder.clear();
+        for (int i = 0; i < totalCities; i++) {
+            geneticStandartOrder.add(i);
+            geneticBestEver.add(i);
+            geneticCurrentBest.add(i);
+        }
+        geneticRecordDistance = Float.MAX_VALUE;
+        for (int i = 0; i < geneticPopulationCount; i++) {
+            geneticPopulation.add(new ArrayList<>(geneticStandartOrder));
+            Collections.shuffle(geneticPopulation.get(i));
+        }
+        geneticRecordDistance = calcDistance(cities, geneticBestEver);
+
     }
 
     @Override
@@ -134,6 +150,8 @@ public class Applet extends PApplet {
             drawRandom();
 
             drawLexical();
+
+            drawGenetic();
         }
     }
 
@@ -142,7 +160,7 @@ public class Applet extends PApplet {
         stroke(0);
         strokeWeight(1);
         fill(255);
-        for (Vector v : randomCities) {
+        for (Vector v : cities) {
             ellipse(v.getX(), v.getY(), 7, 7);
         }
 
@@ -150,18 +168,17 @@ public class Applet extends PApplet {
         stroke(255, 0, 255);
         strokeWeight(2);
         for (int i = 0; i < randomBestEver.size() - 1; i++) {
-            Vector v1 = randomCities.get(randomBestEver.get(i));
-            Vector v2 = randomCities.get(randomBestEver.get(i + 1));
+            Vector v1 = cities.get(randomBestEver.get(i));
+            Vector v2 = cities.get(randomBestEver.get(i + 1));
             line(v1.getX(), v1.getY(), v2.getX(), v2.getY());
         }
 
         //NOW
-        translate(0, height / 2);
         stroke(255);
-        for (int i = 0; i < randomCities.size() - 1; i++) {
-            Vector v1 = randomCities.get(randomOrder.get(i));
-            Vector v2 = randomCities.get(randomOrder.get(i + 1));
-            line(v1.getX(), v1.getY(), v2.getX(), v2.getY());
+        for (int i = 0; i < cities.size() - 1; i++) {
+            Vector v1 = cities.get(randomOrder.get(i));
+            Vector v2 = cities.get(randomOrder.get(i + 1));
+            line(v1.getX(), v1.getY() + (height / 2), v2.getX(), v2.getY() + (height / 2));
         }
 
         //TEXT
@@ -171,52 +188,51 @@ public class Applet extends PApplet {
         for (int i = 0; i < randomOrder.size(); i++) {
             s.append(randomOrder.get(i));
         }
-        text(s.toString() + "\n" + randomtime + "ms", 0, (height / 2) - 24);
+        String t = millisToString(randomtime);
+        text(s.toString() + "\n" + t, 0, height - 24);
 
-        randomSwap(randomOrder);
+        if (!randomIsBest) {
+            randomSwap(randomOrder);
 
-        float d = calcDistance(randomCities, randomOrder);
-        if (d < randomRecordDistance) {
-            randomRecordDistance = d;
-            Collections.copy(randomBestEver, randomOrder);
-            randomtime = millis();
-        }
+            float d = calcDistance(cities, randomOrder);
+            if (d < randomRecordDistance) {
+                randomRecordDistance = d;
+                Collections.copy(randomBestEver, randomOrder);
+                randomtime = time(starttime);
+            }
 
-        if (lexicalEnd) {
-            System.out.println(lexicaltimeHidden);
-            lexicaltime = 0;
-            if(randomRecordDistance <= lexicalRecordDistance && !randomIsBest) {
-                randomIsBest = true;
-                randomtime = randomtime - lexicaltimeHidden;
-            }else if(randomRecordDistance > lexicalRecordDistance && !randomIsBest){
-                randomtime = millis() - lexicaltimeHidden;
+            if (lexicalEnd) {
+                int i = 0;
+                if (round(randomRecordDistance, 1) <= round(lexicalRecordDistance, 1) && !randomIsBest) {
+                    randomIsBest = true;
+                } else if (randomRecordDistance > lexicalRecordDistance && !randomIsBest) {
+                    randomtime = time(starttime);
+                }
             }
         }
     }
 
     private void drawLexical() {
-        translate(0, -(height / 2));
         stroke(0);
         strokeWeight(1);
         fill(255);
-        for (Vector v : lexicalCities) {
-            ellipse(v.getX(), v.getY(), 7, 7);
+        for (Vector v : cities) {
+            ellipse(v.getX() + (width / 3), v.getY(), 7, 7);
         }
 
         stroke(255, 0, 255);
         strokeWeight(2);
         for (int i = 0; i < lexicalBestEver.size() - 1; i++) {
-            Vector v1 = lexicalCities.get(lexicalBestEver.get(i));
-            Vector v2 = lexicalCities.get(lexicalBestEver.get(i + 1));
-            line(v1.getX(), v1.getY(), v2.getX(), v2.getY());
+            Vector v1 = cities.get(lexicalBestEver.get(i));
+            Vector v2 = cities.get(lexicalBestEver.get(i + 1));
+            line(v1.getX() + (width / 3), v1.getY(), v2.getX() + (width / 3), v2.getY());
         }
 
-        translate(0, height / 2);
         stroke(255);
-        for (int i = 0; i < lexicalCities.size() - 1; i++) {
-            Vector v1 = lexicalCities.get(lexicalOrder.get(i));
-            Vector v2 = lexicalCities.get(lexicalOrder.get(i + 1));
-            line(v1.getX(), v1.getY(), v2.getX(), v2.getY());
+        for (int i = 0; i < cities.size() - 1; i++) {
+            Vector v1 = cities.get(lexicalOrder.get(i));
+            Vector v2 = cities.get(lexicalOrder.get(i + 1));
+            line(v1.getX() + (width / 3), v1.getY() + (height / 2), v2.getX() + (width / 3), v2.getY() + (height / 2));
         }
 
         textSize(12);
@@ -225,23 +241,87 @@ public class Applet extends PApplet {
         for (int i = 0; i < lexicalOrder.size(); i++) {
             s.append(lexicalOrder.get(i));
         }
-
+        String t = millisToString(lexicaltime);
         double percent = 100 * (lexicalCount / lexicalTotalPermutations);
-        //System.out.println(lexicalCount);
-        text(String.valueOf(round(percent, 2)) + "% completed\n" + s + "\n" + lexicaltime + "ms", width / 3, (height / 2) - 44);
+        text(String.valueOf(round(percent, 4)) + "% completed\n" + s + "\n" + t, width / 3, height - 44);
+
+        textSize(16);
+        if (frameCount % fps == 0 && percent < 100) {
+            estimate.setEnd(percent);
+            estimate.setTimeEnd(System.currentTimeMillis());
+            estimate.calcEstimate();
+        }
+        if (percent < 100)
+            runtime = System.currentTimeMillis() - starttime;
+        String es = millisToString(estimate.getEstimate());
+        String cu = millisToString(runtime);
+        String a = "estimate: " + es + " - current: " + cu;
+        text(a, (width / 2) - (textWidth(a) / 2), 20);
+
 
         if (percent < 100) {
             lexicalCount = lexicalOrderSwap(lexicalOrder, lexicalCount);
-            float d = calcDistance(lexicalCities, lexicalOrder);
+            float d = calcDistance(cities, lexicalOrder);
             if (d < lexicalRecordDistance) {
                 lexicalRecordDistance = d;
                 Collections.copy(lexicalBestEver, lexicalOrder);
-                lexicaltime = millis();
+                lexicaltime = time(starttime);
             }
-        } else if(!lexicalEnd) {
+        } else if (!lexicalEnd) {
             lexicalEnd = true;
-            lexicaltimeHidden = lexicaltime;
         }
+    }
+
+    private void drawGenetic() {
+
+        //POINTS
+        stroke(0);
+        strokeWeight(1);
+        fill(255);
+        for (Vector v : cities) {
+            ellipse(v.getX() + (2 * width / 3), v.getY(), 7, 7);
+        }
+
+        //BEST
+        stroke(255, 0, 255);
+        strokeWeight(2);
+        for (int i = 0; i < geneticBestEver.size() - 1; i++) {
+            Vector v1 = cities.get(geneticBestEver.get(i));
+            Vector v2 = cities.get(geneticBestEver.get(i + 1));
+            line(v1.getX() + (2 * width / 3), v1.getY(), v2.getX() + (2 * width / 3), v2.getY());
+        }
+
+        //NOW
+        stroke(255);
+        for (int i = 0; i < cities.size() - 1; i++) {
+            Vector v1 = cities.get(geneticCurrentBest.get(i));
+            Vector v2 = cities.get(geneticCurrentBest.get(i + 1));
+            line(v1.getX() + (2 * width / 3), v1.getY() + (height / 2), v2.getX() + (2 * width / 3), v2.getY() + (height / 2));
+        }
+
+        //TEXT
+        textSize(12);
+        fill(255);
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < geneticBestEver.size(); i++) {
+            s.append(geneticBestEver.get(i));
+        }
+        String t = millisToString(genetictime);
+        text(s.toString() + "\n" + t, 2 * width / 3, height - 24);
+
+        if (!geneticIsBest) {
+            geneticStep();
+
+            if (lexicalEnd) {
+                if (round(geneticRecordDistance, 1) <= round(lexicalRecordDistance, 1) && !geneticIsBest) {
+                    geneticIsBest = true;
+                } else if (geneticRecordDistance > lexicalRecordDistance && !geneticIsBest) {
+                    genetictime = time(starttime);
+                }
+            }
+        }
+
+
     }
 
     private int lexicalOrderSwap(List<Integer> order, int count) {
@@ -316,7 +396,7 @@ public class Applet extends PApplet {
         }
     }
 
-    public static double round(double value, int places) {
+    public double round(double value, int places) {
         if (places < 0) throw new IllegalArgumentException();
 
         long factor = (long) Math.pow(10, places);
@@ -324,4 +404,118 @@ public class Applet extends PApplet {
         long tmp = Math.round(value);
         return (double) tmp / factor;
     }
+
+    private long time(long starttime) {
+        return new Date().getTime() - starttime;
+    }
+
+    private void geneticStep() {
+        calcFitness();
+        normalizeFitness();
+        //System.out.println(geneticFitness);
+        nextGeneration();
+    }
+
+    private void calcFitness() {
+        geneticFitness.clear();
+        float currentRecord = Float.MAX_VALUE;
+        for (int i = 0; i < geneticPopulation.size(); i++) {
+            float d = calcDistance(cities, geneticPopulation.get(i));
+            if (d < geneticRecordDistance) {
+                geneticRecordDistance = d;
+                geneticBestEver = new ArrayList<>(geneticPopulation.get(i));
+                genetictime = time(starttime);
+            }
+            if (d < currentRecord) {
+                currentRecord = d;
+                geneticCurrentBest = new ArrayList<>(geneticPopulation.get(i));
+            }
+            geneticFitness.add(i, 1 / (1 + d));
+        }
+    }
+
+    private void normalizeFitness() {
+        float sum = 0;
+        for (int i = 0; i < geneticFitness.size(); i++) {
+            sum += geneticFitness.get(i);
+        }
+        for (int i = 0; i < geneticFitness.size(); i++) {
+            geneticFitness.set(i, geneticFitness.get(i) / sum);
+        }
+    }
+
+    private void nextGeneration() {
+        List<List<Integer>> newPopulation = new ArrayList<>();
+        for (int i = 0; i < geneticPopulation.size(); i++) {
+            List<Integer> orderA = pickOne(geneticPopulation, geneticFitness);
+            List<Integer> orderB = pickOne(geneticPopulation, geneticFitness);
+            List<Integer> order = crossOver(orderA, orderB);
+            mutatate(order);
+            newPopulation.add(order);
+        }
+        geneticPopulation.clear();
+        geneticPopulation.addAll(newPopulation);
+    }
+
+    private List<Integer> crossOver(List<Integer> orderA, List<Integer> orderB) {
+        int start = floor(random(orderA.size()));
+        int end = floor(random(start + 1, orderA.size()));
+        List<Integer> newOrder = new ArrayList<>();
+        for (int i = start; i < end; i++) {
+            newOrder.add(orderA.get(i));
+        }
+        for (int i = 0; i < orderB.size(); i++) {
+            if (!newOrder.contains(orderB.get(i))) {
+                newOrder.add(orderB.get(i));
+            }
+        }
+        //System.out.println(newOrder.size() == orderA.size());
+        return newOrder.size() == orderA.size() ? newOrder : orderA;
+
+    }
+
+    private List<Integer> pickOne(List<List<Integer>> geneticPopulation, List<Float> fitness) {
+        int index = 0;
+        float r = random(1);
+        while (r > 0) {
+            if (index >= fitness.size()) index--;
+            r -= fitness.get(index);
+            index++;
+        }
+        index--;
+        if (index == -1) index = 0;
+        return new ArrayList<>(geneticPopulation.get(index));
+    }
+
+    private void mutatate(List<Integer> order) {
+        for (int i = 0; i < order.size(); i++) {
+            if (random(1) < mutationRate) {
+                int i1 = floor(random(order.size()));
+                int i2 = i1 + 1;
+                if (i2 >= order.size())
+                    i2 = 0;
+                Collections.swap(order, i1, i2);
+            }
+        }
+    }
+
+    public static String millisToString(long millis) {
+        long days = TimeUnit.MILLISECONDS.toDays(millis);
+        long hours = TimeUnit.MILLISECONDS.toHours(millis) - (days * 24);
+        long minutes = TimeUnit.MILLISECONDS.toMinutes(millis) - ((days * 24 * 60) + (hours * 60));
+        long seconds = TimeUnit.MILLISECONDS.toSeconds(millis) - ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60));
+        millis = millis - ((days * 24 * 60 * 60 * 1000) +(hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000));
+
+        if (days > 0)
+            return String.format("%dd %dh %dm %ds %dms", days, hours, minutes, seconds, millis);
+        if (hours > 0)
+            return String.format("%dh %dm %ds %dms", hours, minutes, seconds, millis);
+        else if (minutes > 0)
+            return String.format("%dm %ds %dms", minutes, seconds, millis);
+        else if (seconds > 0)
+            return String.format("%ds %dms", seconds, millis);
+        else
+            return String.format("%dms", millis);
+    }
+
 }
