@@ -1,4 +1,4 @@
-package genetic;
+package ekotech.genetic;
 
 public class Neuron {
 

@@ -1,0 +1,10 @@
+Netzwerk der möglichen Verbindungen auf dem Feld.
+
+Dann ekotech.genetic Algorithmus oder alle Permutationen.
+
+Netzwerk-> Nodes mit Verbindungen
+
+Genetic:
+
+Vererbung eines möglichen besten Pfades mit Mutationen.
+Der Pfad muss alle Nodes oder Ids in der bestimmten Reiehenfolge speichern.

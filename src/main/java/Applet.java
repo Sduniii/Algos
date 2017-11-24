@@ -1,3 +1,4 @@
+import ekotech.network.Vector;
 import processing.core.PApplet;
 
 import java.util.ArrayList;
@@ -17,7 +18,7 @@ public class Applet extends PApplet {
     private float w = 70;
     private float h = 30;
     private boolean inReset = false;
-    private int totalCities = 12;
+    private int totalCities = 7;
     private long starttime;
     private List<Vector> cities = new ArrayList<>(totalCities);
     private Estimate estimate;

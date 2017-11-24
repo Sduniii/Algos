@@ -1,3 +1,5 @@
+package ekotech.network;
+
 public class Vector {
     private float x;
     private float y;
