@@ -1,5 +1,5 @@
 package ekotech.genetic;
 
-public class Neuron {
+public class DNA {
 
 }

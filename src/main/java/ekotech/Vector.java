@@ -1,4 +1,4 @@
-package ekotech.network;
+package ekotech;
 
 public class Vector {
     private float x;

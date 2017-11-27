@@ -1,4 +1,4 @@
-import ekotech.network.Vector;
+import ekotech.Vector;
 import processing.core.PApplet;
 
 import java.util.ArrayList;
